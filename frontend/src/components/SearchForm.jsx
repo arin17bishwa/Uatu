@@ -6,7 +6,7 @@ const SearchForm = ({ onSearch }) => {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [filters, setFilters] = useState({
-    process: "",
+    source: "",
     environment: "",
     exec_id: "",
   });
@@ -65,7 +65,7 @@ const SearchForm = ({ onSearch }) => {
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4">
-        {["process", "environment", "exec_id"].map((key) => (
+        {["source", "environment", "exec_id"].map((key) => (
           <div key={key} className="flex flex-col">
             <label>{key}</label>
             <input
