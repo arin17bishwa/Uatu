@@ -1,13 +1,13 @@
 import json
-import time
 from collections import defaultdict
 from typing import List, Dict, Generator
 
 import splunklib.client as client
 import splunklib.results as results
-from models.splunk import SearchRequest, SplunkEvent, SearchResponseGroup
-from config import export_splunk_config
 from splunklib.client import Service
+
+from config import export_splunk_config
+from models.splunk import SearchRequest, SplunkEvent, SearchResponseGroup
 
 splunk_config = export_splunk_config()
 
@@ -43,20 +43,29 @@ def splunk_job_waiter(job):
 def build_spl_query(req: SearchRequest) -> str:
     if req.raw_query:
         return req.raw_query
-    non_event_fields = ["source", "environment"]
-    query_parts = ["search", "index=api_boomi"]
+    # non_event_fields = ["source", "-environment"]
+    non_event_fields = []
+    query_parts = ["search index=api_boomi"]
     for non_event_field in non_event_fields:
         if getattr(req, non_event_field):
             query_parts.append(f"{non_event_field}={getattr(req, non_event_field)}")
-    query_parts = [" ".join(query_parts)]
+    query_parts = [" | ".join(query_parts)]
     # print(req.__fields__)
-
+    print(req)
     if req.exec_id:
         query_parts.append(f'exec_id="{req.exec_id}"')
+    else:
+        if req.source:
+            query_parts.append(f'source="{req.source}"')
+        if req.environment:
+            query_parts.append(f'environment="{req.environment}"')
+    query_parts = [" ".join(query_parts)]
     for kv in req.kv_filters:
         query_parts.append(f'{kv.key}="{kv.value}"')
 
-    return " | ".join(query_parts)
+    final_query = " ".join(query_parts)
+    print(final_query)
+    return final_query
 
 
 def run_splunk_query(req: SearchRequest) -> List[Dict]:
@@ -66,7 +75,7 @@ def run_splunk_query(req: SearchRequest) -> List[Dict]:
 
     print(query)
     kwargs_search = {
-        "earliest_time": req.time_range.earliest or "-1h",
+        "earliest_time": req.time_range.earliest or "-5d",
         "latest_time": req.time_range.latest or "now",
         "output_mode": "json",
     }
@@ -89,9 +98,8 @@ def run_splunk_query(req: SearchRequest) -> List[Dict]:
 def group_and_sort_events(raw_events: List[Dict]) -> List[SearchResponseGroup]:
     grouped = defaultdict(list)
 
-
     for raw_event in raw_events:
-        event_data=json.loads(raw_event['_raw'])
+        event_data = json.loads(raw_event["_raw"])
         exec_id = event_data.get("exec_id")
         sequence_no = int(event_data.get("sequence", -1))
         event = SplunkEvent(
@@ -99,7 +107,7 @@ def group_and_sort_events(raw_events: List[Dict]) -> List[SearchResponseGroup]:
             sequence_no=sequence_no,
             timestamp=raw_event.get("_time"),
             data=event_data,
-            has_clob=False,  # Will be updated only when needed
+            has_clob=True,  # Will be updated only when needed
         )
         grouped[exec_id].append(event)
 
@@ -107,6 +115,6 @@ def group_and_sort_events(raw_events: List[Dict]) -> List[SearchResponseGroup]:
     for exec_id, events in grouped.items():
         sorted_events = sorted(events, key=lambda x: x.sequence_no)
         response.append(SearchResponseGroup(exec_id=exec_id, events=sorted_events))
-    # with open('splunk_events_000.json','w') as fp:
-    #     json.dump(response, fp, indent=4)
+    print(response)
+
     return response
