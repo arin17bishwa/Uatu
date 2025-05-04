@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+const API_HOST = 'http://localhost:8002';
+import ClobDownloader  from './ClobDownloader';
 
 const EventResults = ({ data }) => {
   return (
@@ -59,12 +61,7 @@ const CollapsibleEvent = ({ event }) => {
           </table>
           {event.has_clob && (
             <div className="mt-2">
-              <a
-                href={`/api/clob?exec_id=${event.exec_id}&sequence_no=${event.sequence_no}`}
-                className="text-blue-600 underline"
-              >
-                Download CLOB
-              </a>
+                <ClobDownloader execId={event.exec_id} sequenceNo={event.sequence_no} />
             </div>
           )}
         </div>

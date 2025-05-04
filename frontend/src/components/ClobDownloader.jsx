@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+const API_HOST = "http://localhost:8002";
 
 const ClobDownloader = ({ execId, sequenceNo }) => {
   const [status, setStatus] = useState("idle"); // idle, loading, notfound
@@ -6,12 +7,14 @@ const ClobDownloader = ({ execId, sequenceNo }) => {
   const handleDownload = async () => {
     setStatus("loading");
 
-    const response = await fetch(
-      `/api/clob?exec_id=${execId}&sequence_no=${sequenceNo}`
-    );
-
+    const response = await fetch(`${API_HOST}/api/clob/${execId}/${sequenceNo}`);
+    console.log(response.status)
     if (!response.ok) {
-      setStatus("notfound");
+      if (response.status === 404) {
+        setStatus("notfound");
+      } else {
+        setStatus("error");
+      }
       return;
     }
 
@@ -21,6 +24,7 @@ const ClobDownloader = ({ execId, sequenceNo }) => {
     a.href = url;
     a.download = `${execId}_${sequenceNo}.txt`;
     a.click();
+    window.URL.revokeObjectURL(url);
     setStatus("idle");
   };
 
