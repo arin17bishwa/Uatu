@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 
-const EventResults = ({ results }) => {
+const EventResults = ({ data }) => {
   return (
     <div className="space-y-4">
-      {results.map((group, idx) => (
+      {data && data.map((group, idx) => (
         <EventGroup key={idx} execId={group.exec_id} events={group.events} />
       ))}
     </div>

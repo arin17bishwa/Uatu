@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import SearchForm from "./components/SearchForm";
 import EventResults from "./components/EventResults";
 const API_HOST = "http://localhost:8002";
@@ -13,6 +13,7 @@ function App() {
       body: JSON.stringify(formData),
     });
     const data = await response.json();
+    console.log(data)
     setResults(data); // assume backend returns grouped data
   };
 
