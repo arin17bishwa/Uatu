@@ -33,7 +33,7 @@ const SearchForm = ({ onSearch }) => {
       },
       source,
       environment,
-      execution_id: executionId,
+      exec_id: executionId,
       kv_filters: kvFilters.filter(f => f.key && f.value)
     };
     onSearch(payload);
