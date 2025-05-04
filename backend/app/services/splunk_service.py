@@ -1,70 +1,105 @@
-from typing import List, Dict
-from models.splunk import SearchRequest, SplunkEvent, SearchResponseGroup
+import json
+import time
 from collections import defaultdict
+from typing import List, Dict, Generator
+
 import splunklib.client as client
 import splunklib.results as results
+from models.splunk import SearchRequest, SplunkEvent, SearchResponseGroup
+from config import export_splunk_config
+from splunklib.client import Service
 
-# You may want to move these to env variables or config
-SPLUNK_HOST = "your-splunk-host"
-SPLUNK_PORT = 8089
-SPLUNK_USERNAME = "your-username"
-SPLUNK_PASSWORD = "your-password"
+splunk_config = export_splunk_config()
+
+SPLUNK_CREDENTIALS = {
+    "host": splunk_config["SPLUNK_HOST"],
+    "port": splunk_config["SPLUNK_PORT"],
+    "splunkToken": splunk_config["SPLUNK_TOKEN"],
+    "autologin": splunk_config["SPLUNK_AUTO_LOGIN"],
+}
+
+
+def splunk_service_creator() -> Generator[Service, None, None]:
+    service: Service = client.connect(**SPLUNK_CREDENTIALS)
+    # while service:
+    try:
+        yield service
+    finally:
+        _ = 0
+
+
+def get_splunk_service() -> Service:
+    return next(splunk_service_creator())
+
+
+def splunk_job_waiter(job):
+    while True:
+        while not job.is_ready():
+            continue
+        if job["isDone"] == "1":
+            break
+
 
 def build_spl_query(req: SearchRequest) -> str:
     if req.raw_query:
         return req.raw_query
+    non_event_fields = ["source", "environment"]
+    query_parts = ["search", "index=api_boomi"]
+    for non_event_field in non_event_fields:
+        if getattr(req, non_event_field):
+            query_parts.append(f"{non_event_field}={getattr(req, non_event_field)}")
+    query_parts = [" ".join(query_parts)]
+    # print(req.__fields__)
 
-    query_parts = ["search index=your_index"]
-    if req.process_name:
-        query_parts.append(f'process_name="{req.process_name}"')
-    if req.environment:
-        query_parts.append(f'environment="{req.environment}"')
-    if req.execution_id:
-        query_parts.append(f'exec_id="{req.execution_id}"')
+    if req.exec_id:
+        query_parts.append(f'exec_id="{req.exec_id}"')
     for kv in req.kv_filters:
         query_parts.append(f'{kv.key}="{kv.value}"')
 
     return " | ".join(query_parts)
 
+
 def run_splunk_query(req: SearchRequest) -> List[Dict]:
-    service = client.connect(
-        host=SPLUNK_HOST,
-        port=SPLUNK_PORT,
-        username=SPLUNK_USERNAME,
-        password=SPLUNK_PASSWORD,
-        scheme="https"
-    )
+    service = get_splunk_service()
 
     query = build_spl_query(req)
+
+    print(query)
     kwargs_search = {
-        "earliest_time": req.time_range.earliest,
-        "latest_time": req.time_range.latest,
-        "output_mode": "json"
+        "earliest_time": req.time_range.earliest or "-1h",
+        "latest_time": req.time_range.latest or "now",
+        "output_mode": "json",
     }
 
+    print(kwargs_search)
+
     job = service.jobs.create(query, **kwargs_search)
-    while not job.is_done():
-        pass  # You can add a timeout or sleep if needed
+    splunk_job_waiter(job)
+
+    # print(job.results())
 
     output = []
-    for result in results.JSONResultsReader(job.results(output_mode="json")):
+    for result in results.JSONResultsReader(job.results(output_mode="json", count=0)):
         if isinstance(result, dict):
             output.append(result)
 
     return output
 
+
 def group_and_sort_events(raw_events: List[Dict]) -> List[SearchResponseGroup]:
     grouped = defaultdict(list)
 
-    for e in raw_events:
-        exec_id = e.get("exec_id")
-        sequence_no = int(e.get("sequence_no", 0))
+
+    for raw_event in raw_events:
+        event_data=json.loads(raw_event['_raw'])
+        exec_id = event_data.get("exec_id")
+        sequence_no = int(event_data.get("sequence", -1))
         event = SplunkEvent(
             exec_id=exec_id,
             sequence_no=sequence_no,
-            timestamp=e.get("_time"),
-            data=e,
-            has_clob=False  # Will be updated only when needed
+            timestamp=raw_event.get("_time"),
+            data=event_data,
+            has_clob=False,  # Will be updated only when needed
         )
         grouped[exec_id].append(event)
 
@@ -72,4 +107,6 @@ def group_and_sort_events(raw_events: List[Dict]) -> List[SearchResponseGroup]:
     for exec_id, events in grouped.items():
         sorted_events = sorted(events, key=lambda x: x.sequence_no)
         response.append(SearchResponseGroup(exec_id=exec_id, events=sorted_events))
+    # with open('splunk_events_000.json','w') as fp:
+    #     json.dump(response, fp, indent=4)
     return response

@@ -1,8 +1,14 @@
 # main.py
 
+import os
+import sys
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from routes import splunk_routes, clob_routes
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 app = FastAPI(
     title="Splunk Search + CLOB Viewer",
