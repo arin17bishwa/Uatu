@@ -1,13 +1,14 @@
 import React, { useState } from "react";
 import SearchForm from "./components/SearchForm";
 import EventResults from "./components/EventResults";
+const API_HOST = "http://localhost:8002";
 
 function App() {
   const [results, setResults] = useState([]);
 
   const handleSearch = async (formData) => {
-    const response = await fetch("/api/search", {
-      method: "POST",
+  console.log(formData)
+    const response = await fetch(`${API_HOST}/api/splunk`, {      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(formData),
     });
